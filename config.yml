@@ -32,18 +32,21 @@ languages:
       series: series
     menu:
       main:
+        - name: Posts
+          url: posts/
+          weight: 1
         - name: About
           url: about
-          weight: 1
+          weight: 2
         - name: Archive
           url: archives
-          weight: 2
+          weight: 3
         - name: Search
           url: search/
-          weight: 3
+          weight: 4
         - name: Tags
           url: tags/
-          weight: 4
+          weight: 5
 
 outputFormats:
   llms:
@@ -89,15 +92,15 @@ params:
   homeInfoParams:
     Title: "Hi there 👋"
     Content: |
-      Welcome to my technical blog! Here, I share my personal technical notes and deep-dives on machine learning, generative MLLMs, multimodal foundational architectures, and engineering leadership strategies.
-
+      Welcome to my blog! I'm Byungsoo. Here, I share my personal notes on technologies, as well as occasional personal updates.
+      
   socialIcons:
     - name: github
       title: View Source on Github
       url: "https://github.com/byungsooo"
     - name: linkedin
       title: Connect on LinkedIn
-      url: "https://linkedin.com/in/byungsoo-kim-48762734"
+      url: "https://www.linkedin.com/in/byungsoo-kim-b0247458/"
 
   editPost:
     URL: "https://github.com/byungsooo/byungsooo.github.io/tree/exampleSite/content"
