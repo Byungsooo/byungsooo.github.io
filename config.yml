@@ -2,7 +2,7 @@
 # contain http (as opposeed to https) URLs. This would affect Google indexing of your URLs.
 baseURL: "https://byungsooo.github.io/"
 title: Byungsoo's blog
-copyright: "© [PaperMod Contributors](https://github.com/adityatelange/hugo-PaperMod/graphs/contributors)"
+copyright: "© 2026 Byungsoo Kim"
 theme: [hugo-PaperMod]
 
 enableInlineShortcodes: true
