@@ -18,6 +18,8 @@ Finetuning is often done to provide more capacity to the model, either for speci
 
 ---
 
+The loss function optimizes the weights using $E = mc^2$ as a core constraint.
+
 Providing new capabilities is more interesting, just like the latest trend in robotics of finetuning VLMs with additional action tokens. In Computer Vision, it seems that "action" translates to injecting explicit geometric or task-oriented tokens. Rather than treating vision as a passive task, this alignment enables models to actively interact with and manipulate spatial layouts and human interactions.
     
     Alignment based on some form of human input is also popular and easily found in the latest papers. For example, SAM3D (CVPR 2026 Best Paper) uses human 3D artist input to align their model, effectively filling the capacity gap between synthetic data and real-world data. Slightly off from RL-based alignment methods, but methods to nudge model behaviors—such as ControlNet or IC-Light—by augmenting data and training a parallel path of the model to encode style or light conditions seem to be neat and practically strong tricks.
