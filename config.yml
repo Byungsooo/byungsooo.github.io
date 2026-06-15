@@ -90,9 +90,9 @@ params:
     imageTitle: my image
 
   homeInfoParams:
-    Title: "Hi there 👋"
+    Title: "Welcome to my blog! 👋"
     Content: |
-      Welcome to my blog! I'm Byungsoo. Here, I share my personal notes on technologies, as well as occasional personal updates.
+      I'm Byungsoo. Here, I share my personal notes on technologies (mostly ML/AI), as well as personal log.
       
   socialIcons:
     - name: github
