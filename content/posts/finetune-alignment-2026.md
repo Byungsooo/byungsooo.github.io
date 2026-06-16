@@ -12,7 +12,11 @@ Continued from [the last week’s posting on compouter vision foundation models.
     
 While backbone models are strong across multiple domains, the finetuning process bridges the gap between the general capabilities of a backbone and the specific requirements of an application. Once a suitable backbone model is selected, such as Qwen-VL for image understanding or the DiT family for pixel-level generation, the next decision needed is choosing the right finetuning methodology.
     
-Finetuning is often done to provide more capacity to the model, either for specialization on a certain subdomain or to provide new capabilities. For sub-domain specialization, Parameter-Efficient Fine-Tuning (PEFT) with LoRA (or DoRA) has already been popular for a while.
+Finetuning is often done to provide more capacity to the model, either for specialization on a certain subdomain or to provide new capabilities. For sub-domain specialization, Parameter-Efficient Fine-Tuning (PEFT) with LoRA (or DoRA) has already been popular for a while. The forward path of LoRA is defined as:
+
+$$h = W_0 x + \Delta W x = W_0 x + \frac{\alpha}{r} (BA)x$$
+
+, where it is important to initialize $A$, and $B$ tensors properly (e.g. $A$ with Guassian and $B$ with zeros) to avoid zero gradient problems.
 
 - [ ] TODO: Equations and simple 1~2 sentences to compare DoRA against LoRA.
 
