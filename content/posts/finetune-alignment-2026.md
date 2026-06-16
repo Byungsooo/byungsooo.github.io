@@ -19,7 +19,7 @@ Consequently, if the underlying domain distribution remains constant and only th
 
 $$h = W_0 x + \Delta W x = W_0 x + \frac{\alpha}{r} (BA)x$$
 
-When implementing LoRA, specific structural initialization details are critical. For instance, initializing matrix $A$ with a random Gaussian distribution and matrix $B$ to zero is essential to break mathematical symmetry while avoiding zero-gradient initialization traps during step zero.
+When implementing LoRA, specific structural initialization details are critical. For instance, initializing matrix $A$ with a random Gaussian distribution and matrix $B$ to zero is essential to break mathematical symmetry while [avoiding zero-gradient initialization](https://huggingface.co/docs/peft/main/en/package_reference/lora) traps during step zero.
 
 ## Finetuning with Action Tokens
 
