@@ -11,15 +11,17 @@ Continued from [last week’s posting on computer vision foundation models.](htt
 
 While backbone models are highly robust across multiple domains, the fine-tuning process bridges the gap between a backbone's general capabilities and an application's specific operational requirements. Once a suitable backbone model is selected—such as Qwen-VL for multimodal understanding or the DiT family for pixel-level generation—the next architectural decision is choosing the right fine-tuning methodology.
 
-## Finetuning Full-Layers vs. Targeted-Layers vs. LoRA
+## Finetuning Full-Layers vs. Targeted-Layers vs. LoRA vs. ZeroConv
 
-Fine-tuning can be applied across full layers, restricted to targeted projection layers, or isolated via low-rank adapters (PEFT). While full-layer fine-tuning comprehensively handles deep domain distribution shifts, it introduces extreme VRAM overhead, necessitating complex distributed training mechanics like FSDP or ZeRO-3. 
+Fine-tuning can be applied across full layers, restricted to targeted projection layers, or isolated via low-rank adapters (PEFT). While full-layer fine-tuning comprehensively handles deep domain distribution shifts, it introduces extreme memory overhead, requiring complex distributed training mechanics with parallelism.
 
 Consequently, if the underlying domain distribution remains constant and only the downstream target task changes, parameter-efficient fine-tuning (PEFT) via LoRA (or its variants) is often optimal. 
 
 $$h = W_0 x + \Delta W x = W_0 x + \frac{\alpha}{r} (BA)x$$
 
 When implementing LoRA, specific structural initialization details are critical. For instance, initializing matrix $A$ with a random Gaussian distribution and matrix $B$ to zero is essential to break mathematical symmetry while [avoiding zero-gradient initialization](https://huggingface.co/docs/peft/main/en/package_reference/lora) traps during step zero.
+
+Slightly distinct from these LoRA methods, fine-tuning frameworks based on Zero Convolution (such as ControlNet or IC-Light) are highly effective and powerful for handling more pronounced distribution shifts, particularly when introducing new conditioning modalities. By augmenting training data and building a parallel, trainable copy of the backbone's structural paths, they seamlessly encode explicit conditional constraints like light direction or structural boundaries without modifying the base generation capabilities.
 
 ## Finetuning with Action Tokens
 
@@ -33,10 +35,6 @@ Aligning models based on human feedback or structural constraints remains a cruc
 
 For RLHF-style preference alignment, PPO and GRPO have been the most popular options. Standard PPO is stable and widely used in industry, but it is notorious for its infrastructural overhead; because its absolute advantage estimation requires a dynamic baseline, engineers are forced to host both the Policy (Actor) network and a separate Value (Critic) network in memory simultaneously. Scaling two asymmetric, multi-billion-parameter models across distributed clusters introduces severe memory bottlenecks and N-dimensional parallelism engineering challenges.
 
-To bypass this infrastructure bottleneck, GRPO completely eliminates the Critic network. Instead, it samples a group of outputs ($o_1, o_2, \dots, o_G$) from the old policy ($\pi_{\theta_{old}}$) for a single prompt and computes a relative, normalized advantage directly within that peer group:
+To bypass this infrastructure bottleneck, GRPO completely eliminates the Critic network. Instead, it samples a group of outputs ($o_1, o_2, \dots, o_G$) from the old policy ($\pi_{\theta_{old}}$) for a single prompt and computes a relative, normalized advantage directly within that peer group, with $\tilde{A}_i = \frac{R_i - \text{mean}(R)}{\text{std}(R)}$.
 
 $$\mathcal{L}_{\text{GRPO}}(\theta) = \frac{1}{G} \sum_{i=1}^{G} \left[ \min \left( \frac{\pi_\theta(o_i|q)}{\pi_{\theta_{old}}(o_i|q)} \tilde{A}_i, \text{clip}\left(\frac{\pi_\theta(o_i|q)}{\pi_{\theta_{old}}(o_i|q)}, 1-\epsilon, 1+\epsilon\right) \tilde{A}_i \right) - \beta D_{KL}(\pi_\theta \| \pi_{ref}) \right]$$
-
-By utilizing a standardized relative reward—where the advantage is computed purely as $\tilde{A}_i = \frac{R_i - \text{mean}(R)}{\text{std}(R)}$ across the sampled outputs—GRPO dramatically cuts down GPU memory consumption, freeing up hardware capacity to scale batch sizes or utilize larger base backbones instead.
-
-Slightly distinct from these heavy RL-based alignment methods, latent-nudging strategies, such as ControlNet or IC-Light, sometimes offer pragmatic alternatives. By augmenting training data and building a parallel, trainable copy of the backbone's structural paths, they seamlessly encode explicit conditional constraints like light direction or structural boundaries without modifying the base generation capabilities.
