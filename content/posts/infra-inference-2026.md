@@ -1,6 +1,6 @@
 ---
 title: "Infra & Inference (2026 Edition)"
-date: 2026-06-16
+date: 2099-12-31
 description: "The latest trends in parameter-efficient fine-tuning, action token grounding, and memory-efficient alignment."
 tags: ["fine-tuning", "alignment", "genai", "mllm"]
 draft: true
