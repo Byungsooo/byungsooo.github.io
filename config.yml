@@ -115,6 +115,21 @@ params:
 
 markup:
   goldmark:
+    extensions:
+      passthrough:
+        enable: true
+        delimiters:
+          block:
+            - - '\['
+              - '\]'
+            - - '$$'
+              - '$$'
+          inline:
+            - - '\('
+              - '\)'
+            # If you want to use single $ for inline as well, uncomment the lines below:
+            - - '$'
+              - '$'
     renderer:
       unsafe: true
   highlight:
