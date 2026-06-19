@@ -1,6 +1,6 @@
 ---
 title: "Infra & Inference (2026 Edition)"
-date: 2099-12-31
+date: 2026-06-19
 description: "The latest trends in parameter-efficient fine-tuning, action token grounding, and memory-efficient alignment."
 tags: ["fine-tuning", "alignment", "genai", "mllm"]
 draft: true
@@ -16,28 +16,18 @@ For MLLMs, memory pressure is driven primarily by the integration of high-resolu
 
 ## Efficient Memory Management and GPU Orchestration
 
-To train and scale these systems without triggering immediate Out-of-Memory (OOM), modern orchestration relies on tightly decoupled multi-dimensional parallelism matrices executed through highly optimized core engines. For instance, NVIDIA's Megatron-Core framework natively handles combinations of Tensor (TP), Pipeline (PP), Data (DP), Expert (EP), and Context Parallelism (CP), seamlessly scaling across massive clusters ($\text{TP} \times \text{PP} \times \text{DP} \times \text{EP} \times \text{CP}$ total GPUs). Alternative paradigms like PyTorch FSDP2 and DeepSpeed similarly distribute states, though each introduces distinct trade-offs between memory footprint, computational overhead, and engineering flexibility.
+To train and scale these systems without triggering immediate Out-of-Memory (OOM) errors, modern orchestration relies on tightly decoupled multi-dimensional parallelism matrices executed through highly optimized core engines. For instance, NVIDIA's [Megatron-Core framework](https://github.com/NVIDIA/Megatron-LM) natively handles combinations of Tensor (TP), Pipeline (PP), Data (DP), Expert (EP), and Context Parallelism (CP), seamlessly scaling across massive clusters ($\text{TP} \times \text{PP} \times \text{DP} \times \text{EP} \times \text{CP}$ total GPUs). Alternative paradigms like PyTorch [FSDP2](https://pytorch.org/docs/stable/fsdp.html) and [DeepSpeed](https://github.com/microsoft/DeepSpeed) similarly distribute states, though each introduces distinct trade-offs between memory footprint, computational overhead, and engineering flexibility.
 
 ## Attention Optimization
 
 To mitigate the quadratic memory increase ($O(L^2)$) with respect to the context length, FlashAttention introduced a clever hardware-level optimization by loading query, key, and value blocks directly into SRAM and utilizing an online softmax mechanism, successfully dropping the physical High Bandwidth Memory (HBM) footprint of the intermediate matrix to $O(L)$. To scale beyond a single GPU's memory limit, Context Parallelism techniques like Ring Attention can be stacked on top; it shards the sequence across a cluster of devices, executing local blockwise attention chunks with FlashAttention while concurrently passing intermediate $K$ and $V$ results through a ring topology to perfectly mask communication latency behind active compute.
 
-
 ## Inference Memory Management
 
-Serving long-context MLLMs at scale introduces a non-trivial pivot from training infrastructure, shifting focus from static batch slicing to dynamic runtime memory orchestration.
+When serving models to customers, when tens of thousands of images flow into the system, especially when traffic spikes happen, traditional messaging pipelines (e.g., Kafka) need to either drop or queue the requests. While the fundamental issue still remains true and the only ultimate solution might be the horizontal scaling of GPU clusters, there are architectural techniques to maximize the efficiency of GPU utilization.
 
-### 1. Virtualized Allocations via vLLM
-The de facto industry standard for managing dynamic sequence lengths is **vLLM**, powered by **PagedAttention**. By mirroring the virtual memory page tables of traditional operating systems, vLLM shards the Key-Value (KV) cache into non-contiguous physical memory blocks. This completely eliminates internal and external memory fragmentation, allowing serving systems to scale concurrent requests near the physical VRAM ceiling.
+Especially, [vLLM](https://github.com/vllm-project/vllm) has mechanisms of PagedAttention, GPU-CPU memory swap, or preemptive recomputation to significantly improve the utilization of GPU memory and flexibility with increased size of memories coming from long context lengths. By treating the KV cache as dynamically allocatable OS-like memory pages, vLLM eliminates physical VRAM fragmentation on HBM and orchestrates scheduling policies on how to fill or eject the data. This is a lossless infrastructure layer that drastically increases concurrent token throughput without losing precision.
 
-### 2. Resolving Prefill/Decode Asymmetry
-In multi-modal workloads, inference faces a severe operational split:
-- **The Prefill Phase:** Processing massive initial visual cues (e.g., thousands of spatial patches) is highly parallel and **Compute-bound**.
-- **The Decode Phase:** Generating reasoning tokens sequentially is **Memory-bandwidth bound**, as the model must cycle the entire weight and cache state from HBM for every isolated token.
+# Remaining Bottlenecks: Dynamic Memory Management
 
-To decouple these phases and protect existing token generation pipelines from being stalled by massive multi-modal prompts, modern systems leverage **Chunked Prefills**. This technique chops incoming sequence inputs into uniform blocks and schedules them smoothly within active decoding cycles.
-
-### 3. Tree-Structured Caching for System 2 Scaling
-With frontier architectures scaling test-time compute (Inference-Time Scaling via extended hidden Chain-of-Thought paths), reasoning agents frequently branch out via multi-path search trees or parallel verification rollouts. 
-
-Standard linear caching collapses under this weight. Production inference engines now deploy **Tree-Structured Radix Caching**. When multiple reasoning paths branch off from the same 50k-token video prefix, the engine locks a single, read-only root page block in memory and forks the allocation *only* at the divergent reasoning nodes—saving gigabytes of HBM across parallel threads.
+While innovations like vLLM's PagedAttention and 5D parallelism have mitigated static context limits, modern MLLM infrastructures handle highly variable inputs that trigger severe hardware-level memory dilemmas. Because the volume of visual tokens fluctuates based on dynamic image resolutions and video lengths, runtime schedulers cannot accurately predict or pre-allocate physical VRAM pages before the vision encoder runs. This unpredictability compounds in multi-turn or RAG environments, where migrating gigabytes of KV cache across distributed GPU nodes via NVLink or InfiniBand introduces networking overheads that often run slower than simply recomputing from scratch. Even disaggregating compute-heavy prefill phases and memory-bandwidth-bound decode phases into separate GPU clusters remains bottlenecked by the complexity of streaming split $K, V$ tensor blocks in real time without creating massive pipeline bubbles.
