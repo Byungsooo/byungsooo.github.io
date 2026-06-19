@@ -18,6 +18,11 @@ For MLLMs, memory pressure is driven primarily by the integration of high-resolu
 
 To train and scale these systems without triggering immediate Out-of-Memory (OOM), modern orchestration relies on tightly decoupled multi-dimensional parallelism matrices executed through highly optimized core engines. For instance, NVIDIA's Megatron-Core framework natively handles combinations of Tensor (TP), Pipeline (PP), Data (DP), Expert (EP), and Context Parallelism (CP), seamlessly scaling across massive clusters ($\text{TP} \times \text{PP} \times \text{DP} \times \text{EP} \times \text{CP}$ total GPUs). Alternative paradigms like PyTorch FSDP2 and DeepSpeed similarly distribute states, though each introduces distinct trade-offs between memory footprint, computational overhead, and engineering flexibility.
 
+## Attention Optimization
+
+To mitigate the quadratic memory increase ($O(L^2)$) with respect to the context length, FlashAttention introduced a clever hardware-level optimization by loading query, key, and value blocks directly into SRAM and utilizing an online softmax mechanism, successfully dropping the physical High Bandwidth Memory (HBM) footprint of the intermediate matrix to $O(L)$. To scale beyond a single GPU's memory limit, Context Parallelism techniques like Ring Attention can be stacked on top; it shards the sequence across a cluster of devices, executing local blockwise attention chunks with FlashAttention while concurrently passing intermediate $K$ and $V$ results through a ring topology to perfectly mask communication latency behind active compute.
+
+
 ## Inference Memory Management
 
 Serving long-context MLLMs at scale introduces a non-trivial pivot from training infrastructure, shifting focus from static batch slicing to dynamic runtime memory orchestration.
