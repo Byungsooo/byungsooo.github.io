@@ -102,10 +102,10 @@ params:
       title: Connect on LinkedIn
       url: "https://www.linkedin.com/in/byungsoo-kim-b0247458/"
 
-  editPost:
-    URL: "https://github.com/byungsooo/byungsooo.github.io/tree/exampleSite/content"
-    Text: "Suggest Changes" # edit text
-    appendFilePath: true # to append file path to Edit link
+#  editPost:
+#    URL: "https://github.com/byungsooo/byungsooo.github.io/tree/exampleSite/content"
+#    Text: "Suggest Changes" # edit text
+#    appendFilePath: true # to append file path to Edit link
 
   assets:
     disableHLJS: true
