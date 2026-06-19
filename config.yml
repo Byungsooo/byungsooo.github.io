@@ -110,6 +110,9 @@ params:
   assets:
     disableHLJS: true
 
+  math: true
+  katex: true
+
 markup:
   goldmark:
     renderer:
