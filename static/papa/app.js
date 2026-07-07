@@ -36,9 +36,15 @@ function statusPillClass(status) {
   return 'status-pill status-denied';
 }
 
+// Kept outside Alpine's reactive x-data object on purpose: Alpine deep-wraps
+// everything in x-data in a reactivity Proxy, and the Firestore SDK's write
+// methods (update/add/batch) rely on internal state tied to exact object
+// identity — calling them through that Proxy silently breaks writes while
+// reads keep working. A plain module-level variable is never proxied.
+let db = null;
+
 document.addEventListener('alpine:init', () => {
   Alpine.data('app', () => ({
-    db: null,
     _seedChecked: false,
 
     users: [],
@@ -57,6 +63,8 @@ document.addEventListener('alpine:init', () => {
     newAssignedTo: 'both',
     newImageUrl: '',
     newSeed: null,
+    imageLoading: false,
+    imageError: false,
 
     cashoutAmount: 1,
 
@@ -69,8 +77,8 @@ document.addEventListener('alpine:init', () => {
 
     init() {
       firebase.initializeApp(window.firebaseConfig);
-      this.db = firebase.firestore();
-      try { this.db.enablePersistence(); } catch (e) { /* multi-tab or unsupported browser; safe to ignore */ }
+      db = firebase.firestore();
+      try { db.enablePersistence(); } catch (e) { /* multi-tab or unsupported browser; safe to ignore */ }
 
       firebase.auth().onAuthStateChanged((user) => {
         if (user) this.attachListeners();
@@ -79,14 +87,14 @@ document.addEventListener('alpine:init', () => {
     },
 
     attachListeners() {
-      this.db.collection('users').orderBy('order').onSnapshot((snap) => {
+      db.collection('users').orderBy('order').onSnapshot((snap) => {
         this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         this.maybeSeed();
       });
-      this.db.collection('assignments').orderBy('createdAt', 'desc').onSnapshot((snap) => {
+      db.collection('assignments').orderBy('createdAt', 'desc').onSnapshot((snap) => {
         this.assignments = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       });
-      this.db.collection('cashouts').orderBy('createdAt', 'desc').onSnapshot((snap) => {
+      db.collection('cashouts').orderBy('createdAt', 'desc').onSnapshot((snap) => {
         this.cashouts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       });
     },
@@ -95,12 +103,12 @@ document.addEventListener('alpine:init', () => {
       if (this._seedChecked) return;
       this._seedChecked = true;
       try {
-        const snap = await this.db.collection('users').limit(1).get();
+        const snap = await db.collection('users').limit(1).get();
         if (snap.empty) {
-          const batch = this.db.batch();
+          const batch = db.batch();
           DEFAULT_STATE.users.forEach((u, i) => {
             const { id, ...rest } = u;
-            batch.set(this.db.collection('users').doc(id), { ...rest, order: i });
+            batch.set(db.collection('users').doc(id), { ...rest, order: i });
           });
           await batch.commit();
         }
@@ -204,6 +212,7 @@ document.addEventListener('alpine:init', () => {
       return this.newDescription.trim().length === 0;
     },
     get generateButtonLabel() {
+      if (this.imageLoading) return '🎨 Generating…';
       return this.newImageUrl ? '🎲 Regenerate image' : '🎲 Generate image';
     },
 
@@ -262,7 +271,7 @@ document.addEventListener('alpine:init', () => {
     savePin() {
       if (this.newPinValue.length !== 4) { this.pinChangeError = 'PIN must be 4 digits'; return; }
       if (this.newPinValue !== this.confirmPinValue) { this.pinChangeError = "PINs don't match"; return; }
-      this.db.collection('users').doc(this.currentUserId).update({ pin: this.newPinValue })
+      db.collection('users').doc(this.currentUserId).update({ pin: this.newPinValue })
         .then(() => { this.settingsOpen = false; })
         .catch((e) => {
           console.error('Failed to save PIN', e);
@@ -279,19 +288,31 @@ document.addEventListener('alpine:init', () => {
       this.newAssignedTo = 'both';
       this.newImageUrl = '';
       this.newSeed = null;
+      this.imageLoading = false;
+      this.imageError = false;
     },
     closeNewAssignment() { this.showNewAssignment = false; },
     generateImage() {
       const desc = this.newDescription.trim() || 'a fun family chore';
       const seed = Math.floor(Math.random() * 1000000);
       this.newSeed = seed;
+      this.imageLoading = true;
+      this.imageError = false;
       this.newImageUrl = buildImageUrl(desc, seed);
+    },
+    onImageLoad() {
+      this.imageLoading = false;
+      this.imageError = false;
+    },
+    onImageError() {
+      this.imageLoading = false;
+      this.imageError = true;
     },
     addAssignment() {
       const desc = this.newDescription.trim();
       if (!desc) return;
       const seed = this.newSeed || Math.floor(Math.random() * 1000000);
-      this.db.collection('assignments').add({
+      db.collection('assignments').add({
         description: desc,
         credits: this.newCredits,
         assignedTo: this.newAssignedTo,
@@ -305,7 +326,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     markDone(id) {
-      this.db.collection('assignments').doc(id).update({
+      db.collection('assignments').doc(id).update({
         status: 'pending',
         completedBy: this.currentUserId,
       }).catch((e) => console.error('Failed to mark assignment done', e));
@@ -317,10 +338,10 @@ document.addEventListener('alpine:init', () => {
       const kidId = assignment.completedBy;
       const kid = this.users.find(u => u.id === kidId);
 
-      const batch = this.db.batch();
-      batch.update(this.db.collection('assignments').doc(id), { status: 'completed' });
+      const batch = db.batch();
+      batch.update(db.collection('assignments').doc(id), { status: 'completed' });
       if (kidId) {
-        batch.update(this.db.collection('users').doc(kidId), {
+        batch.update(db.collection('users').doc(kidId), {
           credits: firebase.firestore.FieldValue.increment(assignment.credits),
         });
       }
@@ -331,7 +352,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     rejectAssignment(id) {
-      this.db.collection('assignments').doc(id).update({
+      db.collection('assignments').doc(id).update({
         status: 'open',
         completedBy: null,
       }).catch((e) => console.error('Failed to reject assignment', e));
@@ -344,7 +365,7 @@ document.addEventListener('alpine:init', () => {
       if (!kid) return;
       const amount = this.cashoutAmount;
       if (amount < 1 || amount > (kid.credits || 0)) return;
-      this.db.collection('cashouts').add({
+      db.collection('cashouts').add({
         kidId: kid.id,
         credits: amount,
         status: 'pending',
@@ -355,15 +376,15 @@ document.addEventListener('alpine:init', () => {
     approveCashout(id) {
       const req = this.cashouts.find(c => c.id === id);
       if (!req) return;
-      const batch = this.db.batch();
-      batch.update(this.db.collection('cashouts').doc(id), { status: 'approved' });
-      batch.update(this.db.collection('users').doc(req.kidId), {
+      const batch = db.batch();
+      batch.update(db.collection('cashouts').doc(id), { status: 'approved' });
+      batch.update(db.collection('users').doc(req.kidId), {
         credits: firebase.firestore.FieldValue.increment(-req.credits),
       });
       batch.commit().catch((e) => console.error('Failed to approve cash-out', e));
     },
     denyCashout(id) {
-      this.db.collection('cashouts').doc(id).update({ status: 'denied' })
+      db.collection('cashouts').doc(id).update({ status: 'denied' })
         .catch((e) => console.error('Failed to deny cash-out', e));
     },
   }));

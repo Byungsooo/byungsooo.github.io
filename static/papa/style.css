@@ -576,6 +576,7 @@ a:hover { color: oklch(84% 0.16 200); }
 }
 
 .image-preview {
+  position: relative;
   width: 100%; aspect-ratio: 1; max-height: 220px;
   border-radius: 14px;
   background: var(--input-bg);
@@ -588,6 +589,15 @@ a:hover { color: oklch(84% 0.16 200); }
   font-size: 12px; color: var(--muted-dim); text-align: center;
   padding: 20px; font-family: 'JetBrains Mono', monospace;
 }
+.image-status {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 16px;
+  font-size: 12px; color: var(--light);
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(10, 10, 20, 0.6);
+}
+.image-status-error { color: var(--red); }
 
 .generate-btn {
   width: 100%; padding: 10px; border-radius: 10px;

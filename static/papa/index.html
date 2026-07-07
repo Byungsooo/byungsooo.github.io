@@ -275,13 +275,19 @@
         <div class="field-label-bold">Cute AI image</div>
         <div class="image-preview">
           <template x-if="newImageUrl">
-            <img :src="newImageUrl">
+            <img :src="newImageUrl" @load="onImageLoad()" @error="onImageError()">
           </template>
           <template x-if="!newImageUrl">
             <div class="image-placeholder">// generated image preview</div>
           </template>
+          <template x-if="newImageUrl && imageLoading">
+            <div class="image-status">🎨 Generating your cute image…</div>
+          </template>
+          <template x-if="newImageUrl && imageError">
+            <div class="image-status image-status-error">⚠️ Couldn't generate that image — try again</div>
+          </template>
         </div>
-        <button type="button" class="generate-btn" @click="generateImage()" x-text="generateButtonLabel"></button>
+        <button type="button" class="generate-btn" :disabled="imageLoading" :style="{ opacity: imageLoading ? 0.6 : 1 }" @click="generateImage()" x-text="generateButtonLabel"></button>
 
         <div class="modal-actions">
           <button type="button" class="btn-modal-cancel" @click="closeNewAssignment()">Cancel</button>
