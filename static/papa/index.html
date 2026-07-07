@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Family Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js" defer></script>
+<script src="./firebase-config.js" defer></script>
+<script src="./app.js" defer></script>
+<script src="./vendor/alpine.min.js" defer></script>
+</head>
+<body>
+<div x-data="app()" x-init="init()" x-cloak>
+
+  <!-- ---------------- SIGN-IN ---------------- -->
+  <template x-if="isSignedOut">
+    <div class="signin-wrap">
+      <div class="signin-card">
+        <div class="logo-badge"><div class="logo-badge-inner"></div></div>
+        <div class="signin-title">The Family Board</div>
+        <div class="signin-subtitle">// sign in to see tasks &amp; credits</div>
+
+        <div class="user-tiles">
+          <template x-for="u in users" :key="u.id">
+            <button type="button" class="user-tile" @click="selectUser(u.id)">
+              <div class="avatar avatar-88"
+                   :class="[u.role === 'parent' ? 'role-parent' : 'role-kid', selectingUserId === u.id ? 'selected' : '']">
+                <img :src="avatarUrl(u)" :alt="u.name">
+              </div>
+              <div class="tile-name" x-text="u.name"></div>
+              <div class="tile-role" x-text="u.role === 'parent' ? 'Parent' : (u.age ? ('Kid · ' + u.age) : 'Kid')"></div>
+            </button>
+          </template>
+        </div>
+
+        <template x-if="selectingUser">
+          <div class="pin-panel" :class="{ shake: shakePin }">
+            <div class="pin-label">Enter PIN for <span x-text="selectingUser?.name"></span></div>
+            <input
+              type="password"
+              inputmode="numeric"
+              maxlength="4"
+              autofocus
+              class="pin-input"
+              :value="pinInput"
+              @input="onPinInput($event)"
+              placeholder="••••"
+            />
+            <template x-if="pinError">
+              <div class="pin-error">Wrong PIN — try again</div>
+            </template>
+            <div class="pin-actions">
+              <button type="button" class="btn btn-cyan" @click="trySubmitPin()">Unlock</button>
+              <button type="button" class="btn btn-outline" @click="cancelSelect()">Cancel</button>
+            </div>
+            <div class="pin-hint">Default PIN is 0000 — change it anytime after signing in.</div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <!-- ---------------- SIGNED IN ---------------- -->
+  <template x-if="isSignedIn">
+    <div>
+      <div class="app-header">
+        <div class="brand">
+          <div class="brand-icon"><div class="brand-icon-inner"></div></div>
+          <div class="brand-title">The Family Board</div>
+        </div>
+
+        <div class="header-right">
+          <template x-if="myBalancePill">
+            <div class="balance-pill" x-text="myBalancePill"></div>
+          </template>
+          <div class="header-user">
+            <div class="avatar avatar-34" :class="currentUser?.role === 'parent' ? 'role-parent' : 'role-kid'">
+              <img :src="currentUser ? avatarUrl(currentUser) : ''" :alt="currentUser?.name">
+            </div>
+            <div>
+              <div class="header-user-name" x-text="currentUser?.name"></div>
+              <div class="header-user-role" x-text="currentUser?.role === 'parent' ? 'Parent' : 'Kid'"></div>
+            </div>
+          </div>
+          <button type="button" class="icon-btn" @click="openSettings()">⚙</button>
+          <button type="button" class="btn-ghost" @click="signOut()">Sign out</button>
+        </div>
+      </div>
+
+      <div class="main-wrap">
+
+        <div class="kid-balance-grid">
+          <template x-for="k in kidsWithBalance" :key="k.id">
+            <div class="kid-balance-card">
+              <div class="kid-balance-head">
+                <div class="avatar avatar-30 role-kid"><img :src="avatarUrl(k)" :alt="k.name"></div>
+                <div class="kid-balance-name" x-text="k.name"></div>
+              </div>
+              <div class="kid-balance-num">
+                <span x-text="k.credits || 0"></span> <span class="unit">credits</span>
+              </div>
+              <div class="kid-balance-dollar">≈ $<span x-text="dollar(k.credits || 0)"></span></div>
+            </div>
+          </template>
+        </div>
+
+        <div class="section-row">
+          <div class="section-title">Assignments</div>
+          <template x-if="isParent">
+            <button type="button" class="btn btn-pink" @click="openNewAssignment()">+ New Assignment</button>
+          </template>
+        </div>
+
+        <div class="lanes">
+
+          <div>
+            <div class="lane-label">Open · <span x-text="openAssignments.length"></span></div>
+            <div class="lane-row">
+              <template x-for="a in openAssignments" :key="a.id">
+                <div class="task-card open">
+                  <div class="task-img-wrap">
+                    <img class="task-img" :src="taskImageUrl(a)" :alt="a.description">
+                  </div>
+                  <div class="task-desc" x-text="a.description"></div>
+                  <div class="task-meta-row">
+                    <div class="task-credits">🪙 <span x-text="a.credits"></span> credits</div>
+                    <div class="task-assigned" x-text="assignedToLabel(a)"></div>
+                  </div>
+                  <template x-if="canMarkDone(a)">
+                    <button type="button" class="btn btn-cyan btn-full" @click="markDone(a.id)">Mark Done</button>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div>
+            <div class="lane-label">Awaiting Approval · <span x-text="pendingAssignments.length"></span></div>
+            <div class="lane-row">
+              <template x-for="a in pendingAssignments" :key="a.id">
+                <div class="task-card pending">
+                  <div class="task-img-wrap">
+                    <img class="task-img" :src="taskImageUrl(a)" :alt="a.description">
+                  </div>
+                  <div class="task-desc" x-text="a.description"></div>
+                  <div class="task-credits" style="margin-bottom:8px;">🪙 <span x-text="a.credits"></span> credits</div>
+                  <div class="task-completed-by">Completed by <span x-text="completedByLabel(a)"></span></div>
+                  <template x-if="canApprove(a)">
+                    <div class="task-btn-row">
+                      <button type="button" class="btn btn-green btn-flex1" @click="approveAssignment(a.id)">✓ Approve</button>
+                      <button type="button" class="btn btn-outline-sm btn-flex1" @click="rejectAssignment(a.id)">Reject</button>
+                    </div>
+                  </template>
+                  <template x-if="!canApprove(a)">
+                    <div class="task-waiting">Waiting for parent approval…</div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div>
+            <div class="lane-label">Completed · <span x-text="completedAssignments.length"></span></div>
+            <div class="lane-row">
+              <template x-for="a in completedAssignments" :key="a.id">
+                <div class="task-card completed">
+                  <div class="task-img-wrap">
+                    <img class="task-img dimmed" :src="taskImageUrl(a)" :alt="a.description">
+                  </div>
+                  <div class="task-desc" x-text="a.description"></div>
+                  <div class="task-done-line">✓ <span x-text="a.credits"></span> credits to <span x-text="completedByLabel(a)"></span></div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="section-title" style="margin-bottom:16px;">Cash Out</div>
+
+        <template x-if="isKid">
+          <div class="cashout-grid">
+            <div class="cashout-card">
+              <div class="field-label">Your balance</div>
+              <div class="balance-big" x-text="myBalanceLabel"></div>
+              <div class="cashout-input-row">
+                <input type="number" min="1" class="number-input w90" x-model.number="cashoutAmount">
+                <div class="cashout-preview">credits → $<span x-text="cashoutDollarPreview"></span></div>
+              </div>
+              <button type="button" class="btn btn-pink btn-full" style="padding:11px;" @click="requestCashout()">Request Cash-Out</button>
+            </div>
+            <div>
+              <div class="list-label">My Requests</div>
+              <div class="list-col">
+                <template x-for="c in myCashouts" :key="c.id">
+                  <div class="req-item">
+                    <div class="req-credits"><span x-text="c.credits"></span> credits · $<span x-text="cashoutDollar(c)"></span></div>
+                    <div :class="statusPillClass(c.status)" x-text="statusLabel(c.status)"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="isParent">
+          <div class="cashout-grid">
+            <div>
+              <div class="list-label">Pending Requests</div>
+              <div class="list-col">
+                <template x-for="c in pendingCashouts" :key="c.id">
+                  <div class="req-item pending-parent">
+                    <div>
+                      <div class="req-kid-name"><span x-text="userName(c.kidId)"></span> · <span x-text="c.credits"></span> credits</div>
+                      <div class="req-dollar">≈ $<span x-text="cashoutDollar(c)"></span> cash</div>
+                    </div>
+                    <div class="req-buttons">
+                      <button type="button" class="btn-sm-green" @click="approveCashout(c.id)">Approve</button>
+                      <button type="button" class="btn-sm-outline" @click="denyCashout(c.id)">Deny</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+            <div>
+              <div class="list-label">History</div>
+              <div class="list-col">
+                <template x-for="c in resolvedCashouts" :key="c.id">
+                  <div class="history-item">
+                    <div class="history-text"><span x-text="userName(c.kidId)"></span> · <span x-text="c.credits"></span> credits · $<span x-text="cashoutDollar(c)"></span></div>
+                    <div :class="statusPillClass(c.status)" x-text="statusLabel(c.status)"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </template>
+
+      </div>
+    </div>
+  </template>
+
+  <!-- ---------------- NEW ASSIGNMENT MODAL ---------------- -->
+  <template x-if="showNewAssignment">
+    <div class="modal-overlay">
+      <div class="modal-panel wide">
+        <div class="modal-title">New Assignment</div>
+
+        <div class="field-label-bold">Task description</div>
+        <textarea class="textarea" rows="2" placeholder="e.g. Clean the garage" x-model="newDescription"></textarea>
+
+        <div class="field-label-bold">Credits</div>
+        <div class="cashout-input-row" style="margin-bottom:8px;">
+          <input type="number" min="1" max="50" class="number-input w80" x-model.number="newCredits">
+          <div class="cashout-preview">≈ $<span x-text="newCreditsDollarPreview"></span></div>
+        </div>
+        <div class="preset-row">
+          <template x-for="p in creditPresets" :key="p">
+            <button type="button" class="preset-btn" :class="{ active: newCredits === p }" @click="newCredits = p" x-text="p"></button>
+          </template>
+        </div>
+
+        <div class="field-label-bold">Assign to</div>
+        <div class="assign-row">
+          <template x-for="o in assignedToOptions" :key="o.value">
+            <button type="button" class="assign-btn" :class="{ active: newAssignedTo === o.value }" @click="newAssignedTo = o.value" x-text="o.label"></button>
+          </template>
+        </div>
+
+        <div class="field-label-bold">Cute AI image</div>
+        <div class="image-preview">
+          <template x-if="newImageUrl">
+            <img :src="newImageUrl">
+          </template>
+          <template x-if="!newImageUrl">
+            <div class="image-placeholder">// generated image preview</div>
+          </template>
+        </div>
+        <button type="button" class="generate-btn" @click="generateImage()" x-text="generateButtonLabel"></button>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-modal-cancel" @click="closeNewAssignment()">Cancel</button>
+          <button type="button" class="btn-modal-primary" :disabled="addAssignmentDisabled" :style="{ opacity: addAssignmentDisabled ? 0.5 : 1 }" @click="addAssignment()">Add Assignment</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ---------------- SETTINGS MODAL ---------------- -->
+  <template x-if="settingsOpen">
+    <div class="modal-overlay">
+      <div class="modal-panel narrow">
+        <div class="modal-title sm">Change your PIN</div>
+        <div class="field-label-bold">New 4-digit PIN</div>
+        <input type="password" inputmode="numeric" maxlength="4" class="pin-modal-input"
+               :value="newPinValue" @input="newPinValue = $event.target.value.replace(/\D/g,'').slice(0,4)">
+        <div class="field-label-bold">Confirm PIN</div>
+        <input type="password" inputmode="numeric" maxlength="4" class="pin-modal-input confirm"
+               :value="confirmPinValue" @input="confirmPinValue = $event.target.value.replace(/\D/g,'').slice(0,4)">
+        <template x-if="pinChangeError">
+          <div class="pin-modal-error" x-text="pinChangeError"></div>
+        </template>
+        <div class="settings-actions">
+          <button type="button" class="btn-settings-cancel" @click="closeSettings()">Cancel</button>
+          <button type="button" class="btn-settings-save" @click="savePin()">Save</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ---------------- CELEBRATION ---------------- -->
+  <template x-if="celebration">
+    <div class="celebration-overlay">
+      <div class="confetti" style="left:12%;width:14px;height:14px;border-radius:4px;background:oklch(72% 0.22 340);animation:confettiFall 1.6s ease-in forwards;"></div>
+      <div class="confetti" style="left:24%;width:10px;height:10px;border-radius:50%;background:oklch(78% 0.16 200);animation:confettiFall 1.9s ease-in forwards;animation-delay:0.1s;"></div>
+      <div class="confetti" style="left:38%;width:12px;height:12px;border-radius:3px;background:oklch(88% 0.19 100);animation:confettiFall 1.5s ease-in forwards;animation-delay:0.15s;"></div>
+      <div class="confetti" style="left:52%;width:10px;height:10px;border-radius:50%;background:oklch(68% 0.22 25);animation:confettiFall 1.8s ease-in forwards;animation-delay:0.05s;"></div>
+      <div class="confetti" style="left:64%;width:14px;height:14px;border-radius:4px;background:oklch(82% 0.19 155);animation:confettiFall 1.7s ease-in forwards;animation-delay:0.2s;"></div>
+      <div class="confetti" style="left:78%;width:10px;height:10px;border-radius:50%;background:oklch(72% 0.22 340);animation:confettiFall 1.6s ease-in forwards;animation-delay:0.12s;"></div>
+      <div class="confetti" style="left:88%;width:12px;height:12px;border-radius:3px;background:oklch(78% 0.16 200);animation:confettiFall 2s ease-in forwards;animation-delay:0.08s;"></div>
+      <div class="celebration-panel">
+        <div class="celebration-emoji">🎉</div>
+        <div class="celebration-credits">+<span x-text="celebration?.credits"></span> credits!</div>
+        <div class="celebration-name">for <span x-text="celebration?.name"></span></div>
+      </div>
+    </div>
+  </template>
+
+</div>
+</body>
+</html>
