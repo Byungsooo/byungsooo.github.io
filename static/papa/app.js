@@ -8,8 +8,8 @@ const DEFAULT_STATE = {
 };
 
 function buildImageUrl(desc, seed) {
-  const prompt = 'cute flat vector sticker illustration of ' + desc + ', chore chart style, vibrant warm colors, simple clean background, no text, no words, family friendly';
-  return 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=512&height=512&nologo=true&seed=' + seed;
+  const prompt = 'a single cute flat-vector sticker illustration of: ' + desc + '. One clear central subject, bold simple shapes, warm pastel colors, plain soft background, children\'s book art style, no text, no words, no letters, no charts, no checklists, family friendly';
+  return 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=512&height=512&nologo=true&model=flux&enhance=true&seed=' + seed;
 }
 
 function buildAvatarUrl(prompt, seed) {
@@ -169,6 +169,9 @@ document.addEventListener('alpine:init', () => {
     canApprove(a) {
       return this.isParent && a.status === 'pending';
     },
+    canUndoDone(a) {
+      return this.isKid && a.status === 'pending' && !!this.currentUser && a.completedBy === this.currentUser.id;
+    },
 
     get myBalancePill() {
       if (this.isKid && this.currentUser) {
@@ -216,7 +219,7 @@ document.addEventListener('alpine:init', () => {
       return this.newImageUrl ? '🎲 Regenerate image' : '🎲 Generate image';
     },
 
-    taskImageUrl(a) { return buildImageUrl(a.description, a.seed); },
+    taskImageUrl(a) { return a.imageUrl || buildImageUrl(a.description, a.seed); },
 
     // ---------- sign in ----------
 
@@ -312,12 +315,18 @@ document.addEventListener('alpine:init', () => {
       const desc = this.newDescription.trim();
       if (!desc) return;
       const seed = this.newSeed || Math.floor(Math.random() * 1000000);
+      // Store the exact URL shown in the preview (or generate one now if the
+      // user never clicked "Generate image") so the card always shows the
+      // same picture that was approved — never recomputed from parts later,
+      // which could drift if the description changed after generating.
+      const imageUrl = this.newImageUrl || buildImageUrl(desc, seed);
       db.collection('assignments').add({
         description: desc,
         credits: this.newCredits,
         assignedTo: this.newAssignedTo,
         status: 'open',
         seed,
+        imageUrl,
         createdBy: this.currentUserId,
         completedBy: null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -330,6 +339,13 @@ document.addEventListener('alpine:init', () => {
         status: 'pending',
         completedBy: this.currentUserId,
       }).catch((e) => console.error('Failed to mark assignment done', e));
+    },
+
+    undoDone(id) {
+      db.collection('assignments').doc(id).update({
+        status: 'open',
+        completedBy: null,
+      }).catch((e) => console.error('Failed to undo done', e));
     },
 
     approveAssignment(id) {

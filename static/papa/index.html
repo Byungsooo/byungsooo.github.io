@@ -156,7 +156,13 @@
                       <button type="button" class="btn btn-outline-sm btn-flex1" @click="rejectAssignment(a.id)">Reject</button>
                     </div>
                   </template>
-                  <template x-if="!canApprove(a)">
+                  <template x-if="canUndoDone(a)">
+                    <div>
+                      <div class="task-waiting" style="margin-bottom:8px;">Waiting for parent approval…</div>
+                      <button type="button" class="btn btn-outline-sm btn-full" @click="undoDone(a.id)">↩️ Oops, undo</button>
+                    </div>
+                  </template>
+                  <template x-if="!canApprove(a) && !canUndoDone(a)">
                     <div class="task-waiting">Waiting for parent approval…</div>
                   </template>
                 </div>
